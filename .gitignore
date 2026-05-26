@@ -1,0 +1,7 @@
+settings.json
+templates.json
+__pycache__/
+*.pyc
+.agents/
+.claude/skills/
+skills-lock.json
