@@ -51,6 +51,13 @@ def firebase_patch(cfg, node, data):
         return json.loads(r.read())
 
 
+def firebase_delete(cfg, node):
+    url = _fb_url(cfg, node)
+    req = urllib.request.Request(url, method='DELETE')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read())
+
+
 # ── 태그 전용 (Firebase 경로: obs/) ──────────────────────────────────
 def today_key():
     """오늘 날짜 키 (YYYY-MM-DD)."""

@@ -1,4 +1,6 @@
 settings.json
+.DS_Store
+src/
 templates.json
 __pycache__/
 *.pyc

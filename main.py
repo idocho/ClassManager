@@ -1,14 +1,14 @@
 """
-main.py — KakaoAdmin 진입점
+main.py — ClassManager 진입점
 Crafted by IDO(idocho@kakao.com) · Powered by Claude AI
 """
 import tkinter as tk
-from app import KakaoAdminApp
+from app import ClassManagerApp
 
 
 def main():
     root = tk.Tk()
-    KakaoAdminApp(root)
+    ClassManagerApp(root)
     root.mainloop()
 
 
