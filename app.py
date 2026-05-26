@@ -748,6 +748,7 @@ class ClassManagerApp:
 
         self.score_frm = tk.Frame(frm, bg=PANEL)
         self.score_frm.grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 6))
+        self.score_frm.grid_remove()
         tk.Label(self.score_frm, text="성적 참조:", font=FS,
                  bg=PANEL, fg=SUBTEXT).pack(side="left")
         self.score_var = tk.StringVar()

@@ -46,10 +46,12 @@ def build_score_ctx(name: str, cls: str, test_data: dict) -> dict:
 
 
 def _percentile(score, scores):
-    if score is None or not scores:
+    if score is None or not isinstance(score, (int, float)) or not scores:
         return "—"
+    if len(scores) == 1:
+        return 100
     below = sum(1 for s in scores if s < score)
-    return round(below / len(scores) * 100)
+    return round(below / (len(scores) - 1) * 100)
 
 
 def list_variables() -> list:
