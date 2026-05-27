@@ -34,8 +34,13 @@ FT = (_FONT, 10, "bold")
 FB = (_FONT, 9)
 FS = (_FONT, 8)
 
-SETTINGS_PATH  = os.path.join(os.path.dirname(__file__), "settings.json")
-TEMPLATES_PATH = os.path.join(os.path.dirname(__file__), "templates.json")
+if getattr(sys, "frozen", False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(__file__)
+
+SETTINGS_PATH  = os.path.join(BASE_DIR, "settings.json")
+TEMPLATES_PATH = os.path.join(BASE_DIR, "templates.json")
 
 
 # ── 설정 I/O ──────────────────────────────────────────────────────────
