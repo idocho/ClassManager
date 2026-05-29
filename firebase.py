@@ -2,18 +2,18 @@
 firebase.py — Firebase Realtime Database REST 유틸
 Crafted by IDO(idocho@kakao.com) · Powered by Claude AI
 
-노드 구조:
-  config/          학생 명단, 강사, 프리셋
-  input/           과제수행도 + 특이사항
-  session/         진도/과제 (class_data)
-  obs/             수업 관찰 태그 (DRW 2.0 신규)
-  lastSent/        마지막 전송 데이터 (폴백용)
+ClassManager 가 쓰는 노드 (v2.0 student-centric):
+  students/{nameKey}   학생 명단 {name, class}  — read/write (nameKey = 출결번호)
+  classes/{classId}    학급 {group, ...}        — read/write
+  scores/weekly/       시험 점수                — read-only
+
+dbPath 는 DailyReportWizard 와 공유될 수 있음 (DRW 가 obs/·config/·session/·
+input/·lastSent/ 소유). 전체 {dbPath} 노드를 덮어쓰지 말 것 — students/·classes/ 만 write.
 """
 import json
 import urllib.request
 import urllib.error
 import urllib.parse
-import datetime
 
 
 # ── 내부 헬퍼 ────────────────────────────────────────────────────────
@@ -65,30 +65,3 @@ def firebase_delete(cfg, node):
     req = urllib.request.Request(url, method='DELETE')
     with urllib.request.urlopen(req, timeout=10) as r:
         return json.loads(r.read())
-
-
-# ── 태그 전용 (Firebase 경로: obs/) ──────────────────────────────────
-def today_key():
-    """오늘 날짜 키 (YYYY-MM-DD)."""
-    return datetime.date.today().isoformat()
-
-
-def fetch_tags(cfg):
-    """수업 관찰 태그 전체 로드 → dict. (Firebase: obs/ 노드)
-    구조: { "sheet|cls|name": { "YYYY-MM-DD": { condition, understand, ... } } }
-    """
-    try:
-        data = firebase_get(cfg, "obs")
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
-
-
-def fetch_tags_today(cfg, sheet, cls, name):
-    """특정 학생의 오늘 수업 관찰 태그만 로드. (Firebase: obs/ 노드)"""
-    okey = urllib.parse.quote(f"{sheet}|{cls}|{name}", safe='')
-    try:
-        data = firebase_get(cfg, f"obs/{okey}/{today_key()}")
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
