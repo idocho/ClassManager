@@ -18,9 +18,17 @@ import datetime
 
 # ── 내부 헬퍼 ────────────────────────────────────────────────────────
 def _fb_url(cfg, node):
-    """Firebase REST 엔드포인트 생성 (한글 등 자동 URL 인코딩)."""
-    base    = (cfg.get('dbUrl')  or cfg.get('firebase_url')  or '').rstrip('/')
-    path    = (cfg.get('dbPath') or cfg.get('firebase_path') or '').strip('/')
+    """Firebase REST 엔드포인트 생성 (한글 등 자동 URL 인코딩).
+
+    경로는 dbUrl/dbPath 단일 출처만 사용한다. (레거시 firebase_url/firebase_path
+    폴백 없음 — 설정이 없으면 조용히 다른 경로로 빠지지 않고 명시적으로 오류.)
+    """
+    base = (cfg.get('dbUrl') or '').rstrip('/')
+    path = (cfg.get('dbPath') or '').strip('/')
+    if not base or not path:
+        raise ValueError(
+            "Firebase 경로가 설정되지 않았습니다. 설정에서 dbUrl·dbPath를 입력하세요."
+        )
     enc_path = urllib.parse.quote(path, safe='/')
     enc_node = urllib.parse.quote(node, safe='/')
     return f"{base}/{enc_path}/{enc_node}.json"
