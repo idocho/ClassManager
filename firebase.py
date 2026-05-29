@@ -19,10 +19,11 @@ import datetime
 # ── 내부 헬퍼 ────────────────────────────────────────────────────────
 def _fb_url(cfg, node):
     """Firebase REST 엔드포인트 생성 (한글 등 자동 URL 인코딩)."""
-    base    = cfg.get('firebase_url', '').rstrip('/')
-    path    = cfg.get('firebase_path', '').strip('/')
-    encoded = urllib.parse.quote(node, safe='/')
-    return f"{base}/{path}/{encoded}.json"
+    base    = (cfg.get('dbUrl')  or cfg.get('firebase_url')  or '').rstrip('/')
+    path    = (cfg.get('dbPath') or cfg.get('firebase_path') or '').strip('/')
+    enc_path = urllib.parse.quote(path, safe='/')
+    enc_node = urllib.parse.quote(node, safe='/')
+    return f"{base}/{enc_path}/{enc_node}.json"
 
 
 # ── 기본 CRUD ────────────────────────────────────────────────────────

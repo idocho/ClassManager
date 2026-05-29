@@ -1,4 +1,6 @@
 settings.json
+*.csv
+*.xlsx
 .DS_Store
 src/
 __pycache__/

@@ -341,7 +341,7 @@ class ClassManagerApp:
                     self._on_roster_group_change(),
                     self._set_status(f"반 '{classId}' 추가 완료", GREEN)))
             except Exception as e:
-                self.root.after(0, lambda: self._set_status(f"오류: {e}", RED))
+                self.root.after(0, lambda e=e: self._set_status(f"오류: {e}", RED))
         threading.Thread(target=_write, daemon=True).start()
 
     def _roster_del_class(self):
@@ -371,7 +371,7 @@ class ClassManagerApp:
                     self._on_roster_group_change(),
                     self._set_status(f"반 '{classId}' 삭제 완료", GREEN)))
             except Exception as e:
-                self.root.after(0, lambda: self._set_status(f"오류: {e}", RED))
+                self.root.after(0, lambda e=e: self._set_status(f"오류: {e}", RED))
         threading.Thread(target=_write, daemon=True).start()
 
     def _roster_rename_class(self):
@@ -402,31 +402,79 @@ class ClassManagerApp:
                     self._on_roster_group_change(),
                     self._set_status(f"'{classId}' → '{new_name}' 변경 완료", GREEN)))
             except Exception as e:
-                self.root.after(0, lambda: self._set_status(f"오류: {e}", RED))
+                self.root.after(0, lambda e=e: self._set_status(f"오류: {e}", RED))
         threading.Thread(target=_write, daemon=True).start()
 
     # ── 학생 CRUD ─────────────────────────────────────────────────────
+    def _ask_student_form(self, classId):
+        """출결번호 + 이름을 한 폼에서 입력받아 (hak, name) 반환. 취소 시 None."""
+        dlg = tk.Toplevel(self.root)
+        dlg.title("학생 추가")
+        dlg.configure(bg=PANEL)
+        dlg.transient(self.root)
+        dlg.resizable(False, False)
+        result = {"ok": False}
+
+        frm = tk.Frame(dlg, bg=PANEL)
+        frm.pack(padx=18, pady=16)
+        frm.columnconfigure(0, weight=1)
+
+        tk.Label(frm, text=f"반: {classId}", font=FS, bg=PANEL,
+                 fg=SUBTEXT, anchor="w").grid(row=0, column=0, sticky="w", pady=(0, 8))
+        tk.Label(frm, text="출결번호 (필수)", font=FS, bg=PANEL,
+                 fg=TEXT, anchor="w").grid(row=1, column=0, sticky="w")
+        hak_var = tk.StringVar()
+        e1 = tk.Entry(frm, textvariable=hak_var, font=FB, width=26)
+        e1.grid(row=2, column=0, sticky="ew", pady=(2, 10))
+        tk.Label(frm, text="이름 (필수)", font=FS, bg=PANEL,
+                 fg=TEXT, anchor="w").grid(row=3, column=0, sticky="w")
+        name_var = tk.StringVar()
+        e2 = tk.Entry(frm, textvariable=name_var, font=FB, width=26)
+        e2.grid(row=4, column=0, sticky="ew", pady=(2, 14))
+
+        btns = tk.Frame(frm, bg=PANEL)
+        btns.grid(row=5, column=0, sticky="e")
+
+        def _ok(*_):
+            result["ok"] = True
+            dlg.destroy()
+
+        def _cancel(*_):
+            dlg.destroy()
+
+        tk.Button(btns, text="취소", font=FB, command=_cancel).pack(side="right", padx=(6, 0))
+        tk.Button(btns, text="추가", font=FB, bg=INDIGO, fg="white",
+                  command=_ok).pack(side="right")
+
+        # Enter: 출결번호→이름 이동, 이름에서 제출 / Esc: 취소
+        e1.bind("<Return>", lambda e: e2.focus_set())
+        e2.bind("<Return>", _ok)
+        dlg.bind("<Escape>", _cancel)
+
+        e1.focus_set()
+        dlg.grab_set()
+        self.root.wait_window(dlg)
+
+        if not result["ok"]:
+            return None
+        return hak_var.get().strip(), name_var.get().strip()
+
     def _roster_add_student(self):
         classId = self._get_roster_cls()
         if not classId:
             return
 
-        hak = simpledialog.askstring("학생 추가", "출결번호 (필수):", parent=self.root)
-        if not hak:
+        form = self._ask_student_form(classId)
+        if not form:
             return
-        hak = hak.strip()
-        if not hak:
+        hak, name = form
+        if not hak or not name:
+            messagebox.showwarning("입력 오류",
+                "출결번호와 이름을 모두 입력하세요.", parent=self.root)
             return
         if hak in self.studentsData:
             messagebox.showwarning("중복",
                 f"출결번호 '{hak}'은 이미 등록된 학생입니다.", parent=self.root)
-            return
-
-        name = simpledialog.askstring("학생 추가", "이름:", parent=self.root)
-        if not name:
-            return
-        name = name.strip()
-        if not name:
             return
 
         nameKey = hak  # 출결번호 = nameKey
@@ -440,7 +488,7 @@ class ClassManagerApp:
                     self._on_roster_cls_select(),
                     self._set_status(f"'{name}' 추가 완료", GREEN)))
             except Exception as e:
-                self.root.after(0, lambda: self._set_status(f"오류: {e}", RED))
+                self.root.after(0, lambda e=e: self._set_status(f"오류: {e}", RED))
         threading.Thread(target=_write, daemon=True).start()
 
     def _roster_del_student(self):
@@ -472,7 +520,7 @@ class ClassManagerApp:
                     self._on_roster_cls_select(),
                     self._set_status(f"{len(selected_namekeys)}명 삭제 완료", GREEN)))
             except Exception as e:
-                self.root.after(0, lambda: self._set_status(f"오류: {e}", RED))
+                self.root.after(0, lambda e=e: self._set_status(f"오류: {e}", RED))
         threading.Thread(target=_write, daemon=True).start()
 
     def _roster_move_student(self):
@@ -545,7 +593,7 @@ class ClassManagerApp:
                     self._set_status(
                         f"{len(nameKeys)}명 이관 완료 → {targetClassId}", GREEN)))
             except Exception as e:
-                self.root.after(0, lambda: self._set_status(f"이관 오류: {e}", RED))
+                self.root.after(0, lambda e=e: self._set_status(f"이관 오류: {e}", RED))
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -605,18 +653,39 @@ class ClassManagerApp:
 
         def _upload():
             try:
+                # 새 경로/누락 반 자동 생성 (기존 반 group 은 보존)
+                existing = firebase_get(self.config, "classes")
+                existing = existing if isinstance(existing, dict) else {}
+                needed   = {v["class"] for v in new_students.values() if v.get("class")}
+                missing  = {c: {"group": self._infer_group(c)}
+                            for c in needed if c not in existing}
+                if missing:
+                    firebase_patch(self.config, "classes", missing)
+
                 firebase_put(self.config, "students", new_students)
-                self.studentsData = new_students
+
+                cls2 = firebase_get(self.config, "classes")
+                self.classData    = cls2 if isinstance(cls2, dict) else {}
                 data2 = firebase_get(self.config, "students")
                 self.studentsData = data2 if isinstance(data2, dict) else {}
                 self.root.after(0, lambda: (
                     self._on_roster_group_change(),
+                    self._on_group_change(),
                     self._refresh_unassigned(),
-                    self._set_status(f"Import 완료 — {total}명", GREEN)))
+                    self._set_status(
+                        f"Import 완료 — {total}명, 반 {len(missing)}개 자동 생성", GREEN)))
             except Exception as e:
-                self.root.after(0, lambda: self._set_status(f"Import 오류: {e}", RED))
+                self.root.after(0, lambda e=e: self._set_status(f"Import 오류: {e}", RED))
 
         threading.Thread(target=_upload, daemon=True).start()
+
+    @staticmethod
+    def _infer_group(classId):
+        """반 이름으로 M/T 그룹 추론. 개별화→T, 코드 끝글자 M/T, 그 외 M."""
+        if "개별화" in classId:
+            return "T"
+        last = classId[-1] if classId else ""
+        return last if last in ("M", "T") else "M"
 
     # ══════════════════════════════════════════════════════════════════
     # TAB 2 — 메시지 발송
@@ -887,7 +956,7 @@ class ClassManagerApp:
                         self._refresh_unassigned(),
                         self._set_status(f"'{name}' → {targetClassId} 배정 완료", GREEN)))
                 except Exception as e:
-                    self.root.after(0, lambda: self._set_status(f"오류: {e}", RED))
+                    self.root.after(0, lambda e=e: self._set_status(f"오류: {e}", RED))
             threading.Thread(target=_write, daemon=True).start()
 
         tk.Button(dlg, text="배정", font=FT, bg=ACCENT, fg=DARK,
@@ -910,7 +979,7 @@ class ClassManagerApp:
                     self._refresh_unassigned(),
                     self._set_status(f"'{name}' 삭제 완료", GREEN)))
             except Exception as e:
-                self.root.after(0, lambda: self._set_status(f"오류: {e}", RED))
+                self.root.after(0, lambda e=e: self._set_status(f"오류: {e}", RED))
         threading.Thread(target=_write, daemon=True).start()
 
     # ══════════════════════════════════════════════════════════════════
@@ -979,7 +1048,7 @@ class ClassManagerApp:
             self.studentsData = students_raw if isinstance(students_raw, dict) else {}
             self.root.after(0, self._on_fb_loaded)
         except Exception as e:
-            self.root.after(0, lambda: self._set_status(f"Firebase 오류: {e}", RED))
+            self.root.after(0, lambda e=e: self._set_status(f"Firebase 오류: {e}", RED))
 
     def _on_fb_loaded(self):
         self._set_status("Firebase 연결 완료", GREEN)
