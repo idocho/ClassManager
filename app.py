@@ -241,7 +241,7 @@ class ClassManagerApp:
         for text, cmd, fg in [
             ("+ 학생 추가",    self._roster_add_student,   INDIGO),
             ("다른 반으로 이관", self._roster_move_student,  SUBTEXT),
-            ("학생 삭제",      self._roster_del_student,   RED),
+            ("반에서 제거",    self._roster_del_student,   RED),
         ]:
             tk.Button(btn_frm, text=text, font=FS, bg=PANEL, fg=fg,
                       relief="flat", cursor="hand2",
@@ -492,6 +492,7 @@ class ClassManagerApp:
         threading.Thread(target=_write, daemon=True).start()
 
     def _roster_del_student(self):
+        """선택 학생을 반에서 제거 — 완전 삭제가 아니라 무소속(class=null)으로 편성."""
         classId = self._get_roster_cls()
         if not classId:
             return
@@ -504,21 +505,24 @@ class ClassManagerApp:
                              for k in selected_namekeys]
 
         if not messagebox.askyesno(
-                "학생 삭제",
-                f"{len(selected_namekeys)}명을 완전 삭제합니까?\n" + ", ".join(selected_names),
+                "반에서 제거",
+                f"{len(selected_namekeys)}명을 '{classId}' 반에서 제거하고 "
+                f"무소속으로 옮깁니까?\n" + ", ".join(selected_names),
                 parent=self.root):
             return
 
         for k in selected_namekeys:
-            self.studentsData.pop(k, None)
+            if k in self.studentsData:
+                self.studentsData[k]["class"] = None
 
         def _write():
             try:
                 for nameKey in selected_namekeys:
-                    firebase_delete(self.config, f"students/{nameKey}")
+                    firebase_patch(self.config, f"students/{nameKey}", {"class": None})
                 self.root.after(0, lambda: (
                     self._on_roster_cls_select(),
-                    self._set_status(f"{len(selected_namekeys)}명 삭제 완료", GREEN)))
+                    self._refresh_unassigned(),
+                    self._set_status(f"{len(selected_namekeys)}명 무소속으로 이동", GREEN)))
             except Exception as e:
                 self.root.after(0, lambda e=e: self._set_status(f"오류: {e}", RED))
         threading.Thread(target=_write, daemon=True).start()

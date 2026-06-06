@@ -73,10 +73,14 @@ ClassManager = **관리자 전용 도구**.
 - 반 선택 → `students/{nameKey}/class` 설정
 - 동명이인 문제 없음 — 출결번호가 고유 키이므로 suffix 로직 불필요
 
-**삭제**
+**반에서 제거** (로스터 탭)
 - 확인 다이얼로그 표시
+- `students/{nameKey}/class = null` (PATCH) — **완전 삭제 아님, 무소속으로 전환**
+- 학생 노드·`obs/`·`input/`·`history/`·`scores/` **전부 보존** → 고아 데이터 없음, 재배정 시 이력 복원
+
+**완전 삭제** (무소속 탭)
 - `students/{nameKey}` 노드 완전 삭제
-- 해당 학생의 `obs/`, `input/`, `history/`, `scores/.../students/{nameKey}` 노드 정리 (※ 현행 코드는 `students/{nameKey}`만 삭제 — 나머지는 수동/별도 정리 대상)
+- 해당 학생의 `obs/`, `input/`, `history/`, `scores/.../students/{nameKey}` 는 별도 정리 대상 (※ 현행 코드는 `students/{nameKey}`만 삭제)
 
 **반 이동**
 - 대상 반 선택 → `students/{nameKey}/class` 필드 단일 write
