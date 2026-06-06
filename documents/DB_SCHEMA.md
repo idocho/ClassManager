@@ -1,7 +1,9 @@
 # Firebase DB 스키마 명세
 
 **공유 문서 — ClassManager / DRW2 / DailyReportAnalyzer 공통 참조**  
-**문서 버전**: 1.1 · **최종 수정**: 2026-05-28
+**문서 버전**: 1.2 · **최종 수정**: 2026-06-06
+
+> v1.2 (DRW v2.1.2): `input/` 특이사항 학생 단위 단일(`__note__`)로, 과제수행도는 `obs/assign_grade` 단일 소스(`input/.assign` 폐기). `history/{nameKey}/{date}` 신규(전송 코멘트 누적). `lastSent/` 폐기.
 
 ---
 
@@ -34,14 +36,14 @@ root/
 │               ├── caution: []
 │               ├── extra: []
 │               ├── highlight: []
-│               ├── assign_grade: "done"|"most"|"half"|"little"|"none"
+│               ├── assign_grade: "done"|"most"|"half"|"little"|"none"  # 과제수행도 단일 소스 (DRW v2.1.2)
 │               └── assign_tags: []
 │
-├── input/
+├── input/                          # 당일 입력 (휘발). DRW v2.1.2: 특이사항만, 학생 단위
 │   └── {nameKey}/
-│       └── {subject}/
-│           ├── assign: "..."       # 과제 수행도
-│           └── note: "..."         # 특이사항 메모
+│       └── __note__/
+│           └── note: "..."         # 특이사항 (학생 단위 단일, 과목 종속 아님)
+│                                   # (구 {subject}/{assign,note} 폐기 — 마이그레이션으로 __note__ 통합)
 │
 ├── scores/
 │   ├── weekly/
@@ -74,9 +76,15 @@ root/
 │           └── presets: []
 │
 ├── session/
-│   └── class_data/                 # 진도/과제 (DRW2 PC 앱 사용)
+│   └── class_data/                 # 진도/과제 (DRW2 PC 앱 사용, 휘발)
 │
-└── lastSent/                       # 마지막 발송 데이터 (폴백용)
+├── history/                        # 전송된 최종 특이사항 누적 (DRW v2.1.2 신규)
+│   └── {nameKey}/
+│       └── {YYYY-MM-DD}/           # 학생·날짜별 (같은 날 재전송 시 덮어씀)
+│           ├── note: "..."         # 전송 확정 시점의 최종 코멘트
+│           └── instructor: "강사ID"
+│
+└── (lastSent/ — DRW v2.1.2 폐기)
 ```
 
 ---
@@ -132,8 +140,8 @@ root/
 | 상황 | 동작 |
 |------|------|
 | 반 삭제 | 학생 `class` 필드 → `null` (무소속 잔류) |
-| 학생 삭제 | `students/{nameKey}` 완전 삭제. `obs/`, `input/` 수동 정리 필요 |
-| 학생 반 이동 | `students/{nameKey}/class` 필드만 변경 (1 write). obs/input 이관 불필요 |
+| 학생 삭제 | `students/{nameKey}` 완전 삭제. `obs/`, `input/`, `history/`, `scores/.../students/{nameKey}` 수동 정리 필요 |
+| 학생 반 이동 | `students/{nameKey}/class` 필드만 변경 (1 write). obs/input/history 이관 불필요 |
 | 무소속 학생 | ClassManager 전용 UI에서 반 배정 또는 삭제 |
 
 ---

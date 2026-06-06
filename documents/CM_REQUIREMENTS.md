@@ -76,7 +76,7 @@ ClassManager = **관리자 전용 도구**.
 **삭제**
 - 확인 다이얼로그 표시
 - `students/{nameKey}` 노드 완전 삭제
-- 해당 학생의 `obs/`, `input/` 노드 cascade 삭제
+- 해당 학생의 `obs/`, `input/`, `history/`, `scores/.../students/{nameKey}` 노드 정리 (※ 현행 코드는 `students/{nameKey}`만 삭제 — 나머지는 수동/별도 정리 대상)
 
 **반 이동**
 - 대상 반 선택 → `students/{nameKey}/class` 필드 단일 write
