@@ -8,3 +8,8 @@ __pycache__/
 .agents/
 .claude/skills/
 skills-lock.json
+
+# PyInstaller 빌드 산출물 (추적 해제 2026-06-11)
+build/
+dist/
+__pycache__/

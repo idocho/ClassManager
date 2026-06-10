@@ -41,7 +41,9 @@ Requires KakaoTalk PC app installed and logged in. `pyautogui`/`pyperclip` must 
 
 **Template types**: Templates are either `"common"` (no score data) or `"score"` (reads `fb_scores`). Score-type templates activate the exam dropdown and silently exclude students with no score entry before sending.
 
-**Send flow** (`kakao_send.py:send_messages`): Waits 3 seconds on thread start (for KakaoTalk window activation), then for each message: copies room name → `Ctrl/Cmd+F` → Esc → `Ctrl/Cmd+F` again → paste → Enter → copies message → paste → Enter → Esc.
+**Send flow** (`kakao_send.py:send_messages`): Waits 3 seconds on thread start (for KakaoTalk window activation), then for each message: copies room name → `Ctrl/Cmd+F` → Esc → `Ctrl/Cmd+F` again → paste → Enter → sends body and/or image → Esc. Body = copy message → paste → Enter. Each `msg` may carry an optional `image` path (and `image_first` bool for ordering); image send = `copy_image_to_clipboard` → paste → Enter (with a longer `img_wait = max(wait_time, 1.0)` for the paste-preview popup). An empty `msg` skips the text step, so image-only sends work.
+
+**Image clipboard** (`kakao_send.py:copy_image_to_clipboard`): puts an image file on the OS clipboard as a bitmap with **no new pip dependency** — Windows shells out to PowerShell `Clipboard.SetImage` (run with `-STA`, `CREATE_NO_WINDOW`); macOS uses `osascript`. The send tab exposes 📎 이미지 첨부 / ✕ 제거 / "이미지 먼저" toggle; the chosen image is a transient per-send attachment (NOT saved to `templates.json`) applied to every selected recipient.
 
 **`AUTOMATION` flag**: `kakao_send.py` sets `AUTOMATION = True` only when `pyautogui` and `pyperclip` import successfully. `app.py` imports this flag to disable the send button when missing.
 

@@ -12,7 +12,8 @@ import urllib.parse
 
 from firebase import firebase_delete, firebase_get, firebase_patch, firebase_put
 from kakao_send import AUTOMATION, send_messages
-from template_engine import build_common_ctx, build_score_ctx, list_variables, render
+from template_engine import (DEFAULT_TEMPLATES, build_common_ctx, build_score_ctx,
+                             list_variables, render)
 
 # ── 상수 ──────────────────────────────────────────────────────────────
 _SYS   = sys.platform
@@ -48,7 +49,7 @@ def load_settings() -> dict:
     if os.path.exists(SETTINGS_PATH):
         with open(SETTINGS_PATH, encoding="utf-8") as f:
             return json.load(f)
-    return {"dbUrl": "", "dbPath": "", "wait_time": 0.5, "room_prefix": "오직 "}
+    return {"dbUrl": "", "dbPath": "", "send_speed": "normal", "room_prefix": "오직 "}
 
 
 def save_settings(config: dict):
@@ -58,9 +59,15 @@ def save_settings(config: dict):
 
 def load_templates() -> list:
     if os.path.exists(TEMPLATES_PATH):
-        with open(TEMPLATES_PATH, encoding="utf-8") as f:
-            return json.load(f)
-    return []
+        try:
+            with open(TEMPLATES_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list) and data:
+                return data
+        except Exception:
+            pass
+    # 파일 없음/비어 있음/손상 → 기본 빌트인 시드 (사용자 보유분은 위에서 그대로 반환)
+    return [dict(t) for t in DEFAULT_TEMPLATES]
 
 
 def save_templates(templates: list):
@@ -96,6 +103,10 @@ class ClassManagerApp:
         self.student_vars    = {}
         self.send_selections = {}   # {classId: {nameKey: BooleanVar}}
         self.tmpl_idx        = -1
+
+        # 이미지 첨부 (발송 1회성, templates.json 에는 저장 안 함)
+        self.attach_image_path = ""
+        self.image_first       = tk.BooleanVar(value=False)
 
         self._build_ui()
         self.root.after(100, self._try_load_firebase)
@@ -833,9 +844,25 @@ class ClassManagerApp:
                                     justify="left", anchor="w", wraplength=480)
         self.preview_lbl.pack(fill="x", padx=6, pady=(0, 6))
 
+        # 이미지 첨부 행
+        img_frm = tk.Frame(frm, bg=PANEL)
+        img_frm.grid(row=6, column=0, sticky="ew", padx=12, pady=(0, 6))
+        tk.Button(img_frm, text="📎 이미지 첨부", font=FS, bg="#EEF2FF",
+                  fg=INDIGO, relief="flat", cursor="hand2", padx=6,
+                  command=self._choose_image).pack(side="left")
+        self.attach_lbl = tk.Label(img_frm, text="(없음)", font=FS,
+                                   bg=PANEL, fg=SUBTEXT)
+        self.attach_lbl.pack(side="left", padx=8)
+        self.attach_clear_btn = tk.Button(img_frm, text="✕", font=FS, bg=PANEL,
+                                          fg=RED, relief="flat", cursor="hand2",
+                                          command=self._clear_image)
+        tk.Checkbutton(img_frm, text="이미지 먼저", variable=self.image_first,
+                       font=FS, bg=PANEL, fg=SUBTEXT,
+                       selectcolor=PANEL).pack(side="right")
+
         send_frm = tk.Frame(frm, bg=PANEL)
-        send_frm.grid(row=6, column=0, sticky="ew", padx=12, pady=(0, 12))
-        self.send_btn = tk.Button(send_frm, text="카카오톡 창 활성화 후 전송",
+        send_frm.grid(row=7, column=0, sticky="ew", padx=12, pady=(0, 12))
+        self.send_btn = tk.Button(send_frm, text="카카오톡으로 전송",
                                   font=FT, bg=ACCENT, fg=DARK,
                                   relief="flat", cursor="hand2", pady=8,
                                   command=self._send)
@@ -998,7 +1025,6 @@ class ClassManagerApp:
             ("Firebase URL",    "dbUrl"),
             ("Firebase Path",   "dbPath"),
             ("카톡 채팅방 접두사", "room_prefix"),
-            ("전송 딜레이(초)",   "wait_time"),
         ]
         self._settings_vars = {}
         for i, (label, key) in enumerate(fields):
@@ -1012,22 +1038,39 @@ class ClassManagerApp:
                      highlightthickness=1).grid(row=i, column=1,
                                                 padx=8, pady=10, sticky="ew")
 
+        # 전송 속도 — 숫자 입력 대신 3단 프리셋 (검증 게이트가 실패를 흡수하므로
+        # 프리셋은 1차 시도 템포만 결정, 실패 시 느린 프로파일 재시도가 자동 적용)
+        row = len(fields)
+        tk.Label(tab, text="전송 속도", font=FB, bg=BG, fg=TEXT,
+                 anchor="w").grid(row=row, column=0, sticky="w", padx=24, pady=10)
+        self._speed_var = tk.StringVar(value=self.config.get("send_speed", "normal"))
+        speed_row = tk.Frame(tab, bg=BG)
+        speed_row.grid(row=row, column=1, padx=8, pady=10, sticky="w")
+        for _val, _lbl in (("fast", "고속"), ("normal", "보통 (권장)"), ("stable", "안정")):
+            tk.Radiobutton(speed_row, text=_lbl, variable=self._speed_var, value=_val,
+                           font=FB, bg=BG, fg=TEXT, selectcolor=BG,
+                           activebackground=BG).pack(side="left", padx=(0, 12))
+        tk.Label(tab, text="고속=고성능 PC · 보통=일반 환경 · 안정=저사양/카톡 응답 느릴 때",
+                 font=FS, bg=BG, fg=SUBTEXT, anchor="w").grid(
+                     row=row + 1, column=1, sticky="w", padx=8)
+
         tk.Button(tab, text="저장 & 재연결", font=FT, bg=ACCENT, fg=DARK,
                   relief="flat", cursor="hand2", pady=6,
                   command=self._save_settings).grid(
-                      row=len(fields), column=0, columnspan=2,
+                      row=row + 2, column=0, columnspan=2,
                       padx=24, pady=16, sticky="ew")
+
+    _SEND_SPEED_WAITS = {"fast": 0.3, "normal": 0.5, "stable": 1.0}
+
+    def _send_wait(self):
+        """전송 속도 프리셋 → 1차 시도 마진(초). 구 wait_time(숫자)은 무시."""
+        return self._SEND_SPEED_WAITS.get(self.config.get("send_speed", "normal"), 0.5)
 
     def _save_settings(self):
         for key, v in self._settings_vars.items():
-            val = v.get().strip()
-            if key == "wait_time":
-                try:
-                    self.config[key] = float(val)
-                except ValueError:
-                    self.config[key] = 0.5
-            else:
-                self.config[key] = val
+            self.config[key] = v.get().strip()
+        self.config["send_speed"] = self._speed_var.get()
+        self.config.pop("wait_time", None)   # 구 숫자 설정 제거 — 프리셋으로 대체
         save_settings(self.config)
         self._try_load_firebase()
         self._set_status("설정 저장 완료 — Firebase 재연결 중...", GREEN)
@@ -1272,12 +1315,31 @@ class ClassManagerApp:
             if (0 <= self.tmpl_idx < len(self.templates) and
                     self.templates[self.tmpl_idx].get("type") == "score"):
                 _, _, test_data = self._get_selected_test_data()
-                ctx = build_score_ctx(name, classId, test_data)
+                ctx = build_score_ctx(name, classId, test_data, name_key=nameKey)
             else:
                 ctx = build_common_ctx(name, classId)
             self.preview_lbl.config(text=render(body, ctx))
         except Exception as e:
             self.preview_lbl.config(text=f"[오류] {e}")
+
+    # ── 이미지 첨부 ──────────────────────────────────────────────────
+    def _choose_image(self):
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(
+            title="첨부할 이미지 선택",
+            filetypes=[("이미지", "*.png *.jpg *.jpeg *.gif *.bmp"),
+                       ("모든 파일", "*.*")],
+            parent=self.root)
+        if not path:
+            return
+        self.attach_image_path = path
+        self.attach_lbl.config(text=os.path.basename(path), fg=INDIGO)
+        self.attach_clear_btn.pack(side="left")
+
+    def _clear_image(self):
+        self.attach_image_path = ""
+        self.attach_lbl.config(text="(없음)", fg=SUBTEXT)
+        self.attach_clear_btn.pack_forget()
 
     # ── 전송 ─────────────────────────────────────────────────────────
     def _send(self):
@@ -1288,9 +1350,21 @@ class ClassManagerApp:
             return
 
         body     = self.tmpl_text.get("1.0", "end-1c")
-        prefix   = self.config.get("room_prefix", "오직 ")
+        # 방 이름 규칙 '오직 XXX' — prefix 공백 유무와 무관하게 공백 1개 보장
+        prefix   = (self.config.get("room_prefix") or "오직").strip() + " "
         is_score = (0 <= self.tmpl_idx < len(self.templates) and
                     self.templates[self.tmpl_idx].get("type") == "score")
+
+        # 첨부 이미지 검증
+        img_path  = self.attach_image_path
+        img_first = self.image_first.get()
+        if img_path and not os.path.exists(img_path):
+            messagebox.showwarning("이미지 없음",
+                f"첨부 이미지를 찾을 수 없습니다:\n{img_path}", parent=self.root)
+            return
+        if not body.strip() and not img_path:
+            messagebox.showinfo("알림", "본문 또는 첨부 이미지가 필요합니다.")
+            return
 
         # 전체 반에서 선택된 학생 수집 {classId: [nameKey, ...]}
         selected_by_cls = {}
@@ -1333,22 +1407,30 @@ class ClassManagerApp:
                         ", ".join(no_score_names))
             for nameKey in nameKeys:
                 name = self.studentsData.get(nameKey, {}).get("name", nameKey)
-                ctx  = (build_score_ctx(name, classId, test_data) if is_score
+                ctx  = (build_score_ctx(name, classId, test_data, name_key=nameKey) if is_score
                         else build_common_ctx(name, classId))
-                msgs.append({"room": f"{prefix}{name}", "msg": render(body, ctx)})
+                msg = {"room": f"{prefix}{name}", "msg": render(body, ctx)}
+                if img_path:
+                    msg["image"]       = img_path
+                    msg["image_first"] = img_first
+                msgs.append(msg)
 
         if not msgs:
             messagebox.showinfo("알림", "전송 가능한 학생이 없습니다.")
             return
 
-        confirm = (f"전송 대상: {len(msgs)}명\n" +
+        img_note = ""
+        if img_path:
+            order = "이미지→본문" if img_first else "본문→이미지"
+            img_note = f"\n📎 이미지 첨부: {os.path.basename(img_path)} ({order})"
+        confirm = (f"전송 대상: {len(msgs)}명{img_note}\n" +
                    ", ".join(m["room"] for m in msgs) +
-                   "\n\n카카오톡 창 활성화 후 [예]를 누르세요. (3초 후 시작)")
+                   "\n\n[예]를 누르면 카카오톡 창을 자동으로 찾아 전송합니다.")
         if not messagebox.askyesno("전송 확인", confirm):
             return
 
         self.send_btn.config(state="disabled")
-        wait = self.config.get("wait_time", 0.5)
+        wait = self._send_wait()   # 속도 프리셋(고속/보통/안정)
 
         def _status(text):
             self.root.after(0, lambda: self._set_status(text))
