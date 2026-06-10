@@ -156,3 +156,30 @@ def test_list_variables_has_common_and_score():
     assert "{이름}" in vars_
     assert "{점수}" in vars_
     assert "{백분율}" in vars_
+
+
+# ── v2.0 스키마 회귀 (nameKey 키 + meta 하위) — 2026-06-11 ──────────────
+# 버그: students/ 키가 nameKey(출결번호)인 신 스키마에서 표시이름 조회로 {점수} 전원 "—"
+V2_TEST = {
+    "meta": {"type": "주간Test", "round": "3", "date": "2026-06-10", "max_score": 50},
+    "students": {"20240012": "42", "20240034": 48, "20240056": 35.0},
+}
+
+def test_build_score_ctx_v2_namekey_and_meta():
+    ctx = build_score_ctx("강미주", "3MAM", V2_TEST, name_key="20240012")
+    assert ctx["점수"] == 42          # nameKey 조회 + 문자열 점수 숫자화
+    assert ctx["만점"] == 50          # meta 하위 max_score
+    assert ctx["시험명"] == "주간Test 3"
+    assert ctx["최고"] == 48 and ctx["최저"] == 35
+
+def test_build_score_ctx_v2_namekey_missing_falls_back_to_name():
+    # 구 스키마(이름 키) 데이터 폴백
+    legacy = {"type": "주간Test", "round": "1", "max_score": 100,
+              "students": {"김철수": 85}}
+    ctx = build_score_ctx("김철수", "3MGM", legacy, name_key="99999")
+    assert ctx["점수"] == 85
+
+def test_build_score_ctx_v2_no_score_student():
+    ctx = build_score_ctx("신입생", "3MAM", V2_TEST, name_key="11111")
+    assert ctx["점수"] == "—"
+    assert ctx["백분율"] == "—"

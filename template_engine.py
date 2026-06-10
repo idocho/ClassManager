@@ -27,19 +27,41 @@ def build_common_ctx(name: str, cls: str) -> dict:
     }
 
 
-def build_score_ctx(name: str, cls: str, test_data: dict) -> dict:
+def _num(v):
+    """점수 값 숫자화 — int/float/숫자 문자열 허용, 그 외 None (웹 입력은 문자열일 수 있음)."""
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        try:
+            return float(v.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def build_score_ctx(name: str, cls: str, test_data: dict, name_key: str = None) -> dict:
+    """v2.0 스키마 대응:
+    - students/ 키는 nameKey(출결번호) — name_key 우선 조회, 구 스키마(이름 키) 폴백
+    - 시험 정보(type/round/date/max_score)는 meta/ 하위 — 평면 구조 폴백
+    """
     ctx = build_common_ctx(name, cls)
+    meta = test_data.get("meta", test_data)
     students = test_data.get("students", {})
-    scores = [v for v in students.values() if isinstance(v, (int, float))]
-    my_score = students.get(name)
+    scores = [n for n in (_num(v) for v in students.values()) if n is not None]
+    my_score = _num(students.get(name_key)) if name_key is not None else None
+    if my_score is None:
+        my_score = _num(students.get(name))   # 구 스키마(이름 키) 데이터 폴백
+
+    def _fmt(n):
+        return int(n) if n == int(n) else round(n, 1)
 
     ctx.update({
-        "시험명": f"{test_data.get('type', '')} {test_data.get('round', '')}".strip(),
-        "점수":   my_score if my_score is not None else "—",
-        "만점":   test_data.get("max_score", 100),
+        "시험명": f"{meta.get('type', '')} {meta.get('round', '')}".strip(),
+        "점수":   _fmt(my_score) if my_score is not None else "—",
+        "만점":   meta.get("max_score", 100),
         "평균":   round(sum(scores) / len(scores), 1) if scores else "—",
-        "최고":   max(scores) if scores else "—",
-        "최저":   min(scores) if scores else "—",
+        "최고":   _fmt(max(scores)) if scores else "—",
+        "최저":   _fmt(min(scores)) if scores else "—",
         "백분율": _percentile(my_score, scores),
     })
     return ctx
