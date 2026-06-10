@@ -1,8 +1,9 @@
 # Firebase DB 스키마 명세
 
 **공유 문서 — ClassManager / DRW2 / DailyReportAnalyzer 공통 참조**  
-**문서 버전**: 1.2 · **최종 수정**: 2026-06-06
+**문서 버전**: 1.3 · **최종 수정**: 2026-06-10
 
+> v1.3 (DRW 문서 8.0): `classes/{classId}/courses/{subject}/archived` 신설 — 과목 소프트 삭제. true면 보관 과목(표시/입력/전송 제외, obs·scores·history 기록 보존, 같은 키 재추가 시 복원). 과목 쓰기는 노드 단위 PATCH만 — **classes 전체 PUT 금지**(stale 클라이언트가 삭제 과목을 되살리는 부활 버그 방지).
 > v1.2 (DRW v2.1.2): `input/` 특이사항 학생 단위 단일(`__note__`)로, 과제수행도는 `obs/assign_grade` 단일 소스(`input/.assign` 폐기). `history/{nameKey}/{date}` 신규(전송 코멘트 누적). `lastSent/` 폐기.
 
 ---
@@ -23,7 +24,10 @@ root/
 │           └── {subject}/          # 과목 식별자 (예: "3-1", "3-2")
 │               ├── textbook: "최상위수학"       # 순수 책 이름 (과정 정보 미포함)
 │               ├── curriculum: "middle_school.grade_3.semester_1"  # curriculum.js 키
-│               └── instructor: "강사ID"         # 담당 강사 ID
+│               ├── instructor: "강사ID"         # 담당 강사 ID
+│               └── archived: true              # (선택, v1.3) 소프트 삭제 — 보관 과목.
+│                                               #   표시/입력/전송 제외, 기록(obs·scores·history) 보존.
+│                                               #   같은 키 재추가 시 archived:null로 복원
 │
 ├── obs/
 │   └── {nameKey}/
