@@ -1,8 +1,9 @@
 # Firebase DB 스키마 명세
 
 **공유 문서 — ClassManager / DRW2 / DailyReportAnalyzer 공통 참조**  
-**문서 버전**: 1.3 · **최종 수정**: 2026-06-10
+**문서 버전**: 1.4 · **최종 수정**: 2026-06-11
 
+> v1.4: assignments 실형식 정정(객체 배열 {classId,subject,group,role} — 종전 문자열 배열 표기는 오기). lastSent 노드 DB에서 삭제 완료.
 > v1.3 (DRW 문서 8.0): `classes/{classId}/courses/{subject}/archived` 신설 — 과목 소프트 삭제. true면 보관 과목(표시/입력/전송 제외, obs·scores·history 기록 보존, 같은 키 재추가 시 복원). 과목 쓰기는 노드 단위 PATCH만 — **classes 전체 PUT 금지**(stale 클라이언트가 삭제 과목을 되살리는 부활 버그 방지).
 > v1.2 (DRW v2.1.2): `input/` 특이사항 학생 단위 단일(`__note__`)로, 과제수행도는 `obs/assign_grade` 단일 소스(`input/.assign` 폐기). `history/{nameKey}/{date}` 신규(전송 코멘트 누적). `lastSent/` 폐기.
 
@@ -76,7 +77,9 @@ root/
 │   └── instructors/
 │       └── {instructorId}/
 │           ├── name: "홍길동"
-│           ├── assignments: ["3MAM|3-1", "3MAM|3-2"]   # classId|subject
+│           ├── assignments:                # 객체 배열 — 실제 웹 저장 형식 (v1.4 정정)
+│           │   └── [{classId: "3MAM", subject: "중3-1 SIGNATURE 100+", group: "M", role: "담임"}]
+│           │       # role: 담임|부담임 · 구형 키(sheet/cls/tb)는 PC 폴백만
 │           └── presets: []
 │
 ├── session/
@@ -134,7 +137,7 @@ root/
 
 | 시험 종류 | 노드 | 입력 권한 |
 |----------|------|----------|
-| 반별 주간 시험 | `scores/weekly/{classId}/{subject}/` | 해당 subject의 `instructor` |
+| 반별 주간 시험 | `scores/weekly/{classId}/{subject}/` | 담당 수업 배정(`assignments`에 해당 반+과목) — DRW v2.2.3에서 instructor 필드 기준 폐기 |
 | 학년단위 시험 | `scores/achievement/{curriculum}/` | 담임 (`assignments`에 해당 반 포함) |
 
 ---

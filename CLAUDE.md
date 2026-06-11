@@ -60,4 +60,4 @@ A student appears in the roster/send lists only when its `class` equals an exist
 
 `testKey` format: `"{YYYY-MM-DD}|{type}|{round}"`. Exam dropdown is sorted by key descending (most recent first).
 
-The DB at `dbPath` may be **shared** with other apps (e.g. DailyReportWizard owns `obs/`, `config/`, `session/`, `input/`, `lastSent/`). Never overwrite the whole `{dbPath}` node — write only `students/` and `classes/`.
+The DB at `dbPath` may be **shared** with other apps (e.g. DailyReportWizard owns `obs/`, `config/`, `session/`, `input/`, `history/` — `lastSent/`는 v2.1.2 폐기). Never overwrite the whole `{dbPath}` node — write only `students/` and `classes/`.

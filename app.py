@@ -1419,6 +1419,20 @@ class ClassManagerApp:
             messagebox.showinfo("알림", "전송 가능한 학생이 없습니다.")
             return
 
+        # 동명이인 가드(B4) — 같은 이름은 같은 카톡방('오직 {이름}')으로 검색돼
+        # 타 학부모 오발송 위험 → 겹치는 이름 전원 자동 제외 + 안내
+        from collections import Counter
+        _cnt = Counter(m["room"] for m in msgs)
+        _dups = sorted({r for r, c in _cnt.items() if c > 1})
+        if _dups:
+            msgs = [m for m in msgs if m["room"] not in _dups]
+            messagebox.showwarning("동명이인 제외",
+                "동명이인이 있어 다음 대상은 자동 전송에서 제외했습니다:\n"
+                + ", ".join(_dups)
+                + "\n\n카톡방 이름을 구분한 뒤 개별 전송하세요.")
+            if not msgs:
+                return
+
         img_note = ""
         if img_path:
             order = "이미지→본문" if img_first else "본문→이미지"

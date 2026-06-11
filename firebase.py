@@ -8,7 +8,7 @@ ClassManager 가 쓰는 노드 (v2.0 student-centric):
   scores/weekly/       시험 점수                — read-only
 
 dbPath 는 DailyReportWizard 와 공유될 수 있음 (DRW 가 obs/·config/·session/·
-input/·lastSent/ 소유). 전체 {dbPath} 노드를 덮어쓰지 말 것 — students/·classes/ 만 write.
+input/ 소유, lastSent/는 v2.1.2 폐기). 전체 {dbPath} 노드를 덮어쓰지 말 것 — students/·classes/ 만 write.
 """
 import json
 import urllib.request
