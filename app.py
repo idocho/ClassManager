@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 import urllib.parse
 
-from firebase import firebase_delete, firebase_get, firebase_patch, firebase_put
+from firebase import firebase_delete, firebase_get, firebase_patch, firebase_put, check_schema, SCHEMA_MAX
 from kakao_send import AUTOMATION, send_messages
 from template_engine import (DEFAULT_TEMPLATES, build_common_ctx, build_score_ctx,
                              list_variables, render)
@@ -49,7 +49,7 @@ def load_settings() -> dict:
     if os.path.exists(SETTINGS_PATH):
         with open(SETTINGS_PATH, encoding="utf-8") as f:
             return json.load(f)
-    return {"dbUrl": "", "dbPath": "", "send_speed": "normal", "room_prefix": "오직 "}
+    return {"dbUrl": "", "dbPath": "", "dbSecret": "", "send_speed": "normal", "room_prefix": "오직 "}
 
 
 def save_settings(config: dict):
@@ -107,6 +107,17 @@ class ClassManagerApp:
         # 이미지 첨부 (발송 1회성, templates.json 에는 저장 안 함)
         self.attach_image_path = ""
         self.image_first       = tk.BooleanVar(value=False)
+
+        # 스키마 버전 게이트(#15): DB가 이 앱보다 새 스키마면 쓰기 오염 방지 위해 차단
+        if self.config.get("dbUrl") and self.config.get("dbPath"):
+            ok, db_ver = check_schema(self.config)
+            if not ok:
+                messagebox.showerror(
+                    "앱 버전 낮음",
+                    f"DB 스키마 v{db_ver} > 지원 v{SCHEMA_MAX}\n"
+                    "데이터 보호를 위해 실행을 중단합니다.\n최신 버전 앱으로 교체해 주세요.")
+                self.root.destroy()
+                return
 
         self._build_ui()
         self.root.after(100, self._try_load_firebase)
@@ -1024,6 +1035,7 @@ class ClassManagerApp:
         fields = [
             ("Firebase URL",    "dbUrl"),
             ("Firebase Path",   "dbPath"),
+            ("Firebase Secret", "dbSecret"),
             ("카톡 채팅방 접두사", "room_prefix"),
         ]
         self._settings_vars = {}
