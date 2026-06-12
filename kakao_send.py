@@ -183,6 +183,57 @@ def foreground_title() -> str:
     return buf.value
 
 
+def _norm_title(s: str) -> str:
+    """제목 비교용 정규화 — 카톡 검색이 공백을 무시하므로 동일 규칙 적용."""
+    import re
+    return re.sub(r"\s+", "", s or "")
+
+
+def close_rooms(rooms) -> int:
+    """자동화로 열어둔 채팅방 창 일괄 닫기 (전체 전송 완료 후 호출).
+
+    이미지 방은 업로드 취소 위험("전송 중인 파일" 팝업) 때문에 건별 esc 정리를
+    생략하고 잔류시킴 — 전송이 모두 끝난 시점에 제목 매칭으로 WM_CLOSE 발송.
+    · 키 입력이 아니라 창 메시지라 전면 포커스 불필요(다른 작업 중에도 안전)
+    · 업로드가 아직 진행 중이면 카톡이 확인 팝업으로 닫기를 보류 — 그 창은
+      그대로 두고(자동 확인 금지: 확인=업로드 취소) 미정리 개수만 반환에 반영
+    반환: 닫힌 창 수. 비 Windows 는 0 (수동 운용 유지).
+    """
+    if not _IS_WIN or not rooms:
+        return 0
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    WM_CLOSE = 0x0010
+    targets = {_norm_title(r) for r in rooms if _norm_title(r)}
+
+    def _matched():
+        found = []
+
+        @ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+        def _enum(hwnd, _):
+            if not user32.IsWindowVisible(hwnd):
+                return True
+            t = ctypes.create_unicode_buffer(256)
+            user32.GetWindowTextW(hwnd, t, 256)
+            title = t.value.strip()
+            if title in _KAKAO_TITLES:        # 메인 창은 제외
+                return True
+            nt = _norm_title(title)
+            if nt and any(r in nt for r in targets):
+                found.append(hwnd)
+            return True
+
+        user32.EnumWindows(_enum, 0)
+        return found
+
+    before = _matched()
+    for hwnd in before:
+        user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+    time.sleep(0.5)
+    return max(0, len(before) - len(_matched()))
+
+
 def room_opened(room: str, tries: int = 15, interval: float = 0.1) -> bool:
     """채팅방 열림 검증 — 전면 창 제목=방 이름 폴링(공백 무시). 미검증 본문 발사 차단.
 
@@ -348,6 +399,7 @@ def send_messages(msgs, wait_time=0.5, status_cb=None, done_cb=None, wait_ctrl=N
                 done_cb(0)
             return
         sent = 0
+        lingering = []   # 정리 대상 잔류 방 — 이미지 방(의도적 미닫음) + 오류로 esc 정리 못 한 방
         for i, m in enumerate(msgs):
             if status_cb:
                 status_cb(f"전송 중... ({i+1}/{total})  {m['room']}")
@@ -402,8 +454,9 @@ def send_messages(msgs, wait_time=0.5, status_cb=None, done_cb=None, wait_ctrl=N
 
                 # 방 정리: 이미지 보낸 방은 닫지 않음 — 업로드 진행 중 esc 시
                 # "전송 중인 파일" 팝업(확인=업로드 취소 위험)에 막힘. 텍스트만이면 esc 탈출.
+                # 잔류 방은 전체 전송 완료 후 close_rooms() 로 일괄 정리.
                 if m.get("image"):
-                    pass
+                    lingering.append(m["room"])
                 elif _IS_WIN:
                     for _ in range(4):
                         pyautogui.press("esc"); time.sleep(0.2)
@@ -414,7 +467,19 @@ def send_messages(msgs, wait_time=0.5, status_cb=None, done_cb=None, wait_ctrl=N
                 sent += 1
             except Exception as e:
                 print(f"오류 [{m['room']}]: {e}")
+                lingering.append(m["room"])   # 오류 중단 방도 열려 있을 수 있음
             time.sleep(0.3)  # 게이트 검증으로 단축(기존 0.8)
+        # 전체 전송 완료 → 자동화로 열어둔 잔류 창 일괄 닫기.
+        # 2초 유예: 마지막 이미지 업로드 여유 — 그래도 진행 중이면 카톡이 닫기를
+        # 보류하므로 그 창만 남고 업로드는 보호됨(자동 확인 안 함).
+        if lingering:
+            if status_cb:
+                status_cb("🧹 열린 톡방 정리 중...")
+            time.sleep(2.0)
+            closed = close_rooms(lingering)
+            if status_cb:
+                left = len(set(lingering)) - closed
+                status_cb(f"🧹 톡방 {closed}개 정리" + (f" · {left}개는 업로드 중이라 유지" if left > 0 else ""))
         if done_cb:
             done_cb(sent)
 
