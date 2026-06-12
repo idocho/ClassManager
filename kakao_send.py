@@ -245,7 +245,45 @@ def focus_kakao(settle: float = 0.6) -> bool:
         return False
 
 
-def send_messages(msgs, wait_time=0.5, status_cb=None, done_cb=None):
+class SmartWait:
+    """전송 속도 자동 적응(AIMD + EMA) — DRW v8.11 스마트 모드 이식.
+
+    신호 = 방 열림 검증 게이트 실측: t_open(Enter→방 열림)과 1차 재시도 여부.
+    · 1차 실패(재시도) → wait ×1.6 즉시 감속 (승법 증가)
+    · 빠른 통과(t_open≤0.2s) 연속 2회 → wait -0.15s 가속 (가산 감소)
+    · 지연 EMA > 0.8s → 선제 +0.1s 감속 (추세 반영)
+    범위 [0.25, 1.2]s. 게이트가 바닥을 받치므로 가속해도 오발송 불가 —
+    적응은 1차 통과율만 조절. 학습값은 호출측이 config(smart_wait)에 영속.
+    """
+    MIN, MAX = 0.25, 1.2
+
+    def __init__(self, initial=0.5):
+        try:
+            initial = float(initial or 0.5)
+        except (TypeError, ValueError):
+            initial = 0.5
+        self.wait = min(self.MAX, max(self.MIN, initial))
+        self._ema = None
+        self._fast_streak = 0
+
+    def adjust(self, t_open, retried):
+        self._ema = t_open if self._ema is None else 0.6 * self._ema + 0.4 * t_open
+        if retried:
+            self.wait = min(self.MAX, self.wait * 1.6)
+            self._fast_streak = 0
+        elif self._ema > 0.8:
+            self.wait = min(self.MAX, self.wait + 0.1)
+            self._fast_streak = 0
+        elif t_open <= 0.2:
+            self._fast_streak += 1
+            if self._fast_streak >= 2:
+                self.wait = max(self.MIN, self.wait - 0.15)
+                self._fast_streak = 0
+        else:
+            self._fast_streak = 0
+
+
+def send_messages(msgs, wait_time=0.5, status_cb=None, done_cb=None, wait_ctrl=None):
     """
     카카오톡 채팅방 순차 전송.
 
@@ -253,9 +291,11 @@ def send_messages(msgs, wait_time=0.5, status_cb=None, done_cb=None):
             "msg": "전송할 메시지",
             "image": "C:/path/img.png"  (선택),
             "image_first": False        (선택, True면 이미지를 텍스트보다 먼저)}, ...]
-    wait_time: 각 단계 사이 딜레이(초)
+    wait_time: 각 단계 사이 딜레이(초) — 고정 프리셋 모드
     status_cb(text): 진행 상태 콜백
     done_cb(total): 완료 콜백
+    wait_ctrl: SmartWait 인스턴스(선택) — 주어지면 건마다 wait_ctrl.wait 사용,
+               게이트 실측(t_open·재시도)으로 adjust() 호출해 자동 가감속
     """
     # 이미지는 붙여넣기 후 미리보기 팝업 → Enter 확정까지 여유가 필요
     img_wait = max(wait_time, 1.0)
@@ -319,6 +359,10 @@ def send_messages(msgs, wait_time=0.5, status_cb=None, done_cb=None):
                     done_cb(sent)
                 return
             try:
+                # 스마트 모드: 건마다 학습된 wait 사용 (고정 프리셋이면 wait_time)
+                wait = wait_ctrl.wait if wait_ctrl else wait_time
+                t_open_box = [None]  # 게이트 실측(Enter→방 열림) — 스마트 적응 신호
+
                 # 채팅방 검색·이동 — 방 열림 검증 게이트 (단일 방 연속 전송·미전송 연쇄 차단)
                 def _open(key_gap, search_load, post_enter):
                     """빠른 1차/느린 재시도 프로파일 — 검증 폴링이 통과를 즉시 감지."""
@@ -328,14 +372,25 @@ def send_messages(msgs, wait_time=0.5, status_cb=None, done_cb=None):
                     pyautogui.press("esc");      time.sleep(key_gap)
                     pyautogui.hotkey(_MOD, "f"); time.sleep(key_gap)
                     pyautogui.hotkey(_MOD, "v"); time.sleep(search_load)
-                    pyautogui.press("enter");    time.sleep(post_enter)
-                    return room_opened(m["room"])
-                if not _open(max(0.15, wait_time * 0.5), max(0.3, wait_time), 0.1):
+                    pyautogui.press("enter")
+                    _t0 = time.time()
+                    time.sleep(post_enter)
+                    ok = room_opened(m["room"])
+                    t_open_box[0] = time.time() - _t0
+                    return ok
+                retried = False
+                if not _open(max(0.15, wait * 0.5), max(0.3, wait), 0.1):
+                    retried = True
                     pyautogui.press("esc"); time.sleep(0.3)
                     focus_kakao(0.4)
-                    if not _open(0.3, max(wait_time, 1.0), 0.5):
+                    if not _open(0.3, max(wait, 1.0), 0.5):
                         pyautogui.press("esc")
+                        if wait_ctrl:
+                            wait_ctrl.adjust(1.5, True)  # 완전 실패 — 최대 지연으로 학습
                         raise RuntimeError(f"채팅방 열기 실패: {m['room']}")
+                if wait_ctrl:
+                    wait_ctrl.adjust(
+                        t_open_box[0] if t_open_box[0] is not None else 1.5, retried)
 
                 # 본문/이미지 전송 (순서는 image_first 로 제어)
                 if m.get("image_first"):

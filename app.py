@@ -11,7 +11,7 @@ from tkinter import messagebox, simpledialog, ttk
 import urllib.parse
 
 from firebase import firebase_delete, firebase_get, firebase_patch, firebase_put, check_schema, SCHEMA_MAX
-from kakao_send import AUTOMATION, send_messages
+from kakao_send import AUTOMATION, send_messages, SmartWait
 from template_engine import (DEFAULT_TEMPLATES, build_common_ctx, build_score_ctx,
                              list_variables, render)
 
@@ -1050,19 +1050,21 @@ class ClassManagerApp:
                      highlightthickness=1).grid(row=i, column=1,
                                                 padx=8, pady=10, sticky="ew")
 
-        # 전송 속도 — 숫자 입력 대신 3단 프리셋 (검증 게이트가 실패를 흡수하므로
-        # 프리셋은 1차 시도 템포만 결정, 실패 시 느린 프로파일 재시도가 자동 적용)
+        # 전송 속도 — 스마트(실측 자동 가감속, DRW v8.11 이식) + 3단 고정 프리셋.
+        # 검증 게이트가 실패를 흡수하므로 속도는 1차 시도 템포만 결정,
+        # 실패 시 느린 프로파일 재시도가 자동 적용
         row = len(fields)
         tk.Label(tab, text="전송 속도", font=FB, bg=BG, fg=TEXT,
                  anchor="w").grid(row=row, column=0, sticky="w", padx=24, pady=10)
-        self._speed_var = tk.StringVar(value=self.config.get("send_speed", "normal"))
+        self._speed_var = tk.StringVar(value=self.config.get("send_speed", "smart"))
         speed_row = tk.Frame(tab, bg=BG)
         speed_row.grid(row=row, column=1, padx=8, pady=10, sticky="w")
-        for _val, _lbl in (("fast", "고속"), ("normal", "보통 (권장)"), ("stable", "안정")):
+        for _val, _lbl in (("smart", "스마트 (권장)"), ("fast", "고속"),
+                           ("normal", "보통"), ("stable", "안정")):
             tk.Radiobutton(speed_row, text=_lbl, variable=self._speed_var, value=_val,
                            font=FB, bg=BG, fg=TEXT, selectcolor=BG,
                            activebackground=BG).pack(side="left", padx=(0, 12))
-        tk.Label(tab, text="고속=고성능 PC · 보통=일반 환경 · 안정=저사양/카톡 응답 느릴 때",
+        tk.Label(tab, text="스마트=응답성 실측 자동 가감속(학습값 이어받음) · 고속/보통/안정=고정",
                  font=FS, bg=BG, fg=SUBTEXT, anchor="w").grid(
                      row=row + 1, column=1, sticky="w", padx=8)
 
@@ -1075,8 +1077,24 @@ class ClassManagerApp:
     _SEND_SPEED_WAITS = {"fast": 0.3, "normal": 0.5, "stable": 1.0}
 
     def _send_wait(self):
-        """전송 속도 프리셋 → 1차 시도 마진(초). 구 wait_time(숫자)은 무시."""
-        return self._SEND_SPEED_WAITS.get(self.config.get("send_speed", "normal"), 0.5)
+        """고정 프리셋 → 1차 시도 마진(초). 스마트 모드는 _make_wait_ctrl() 사용."""
+        return self._SEND_SPEED_WAITS.get(self.config.get("send_speed", "smart"), 0.5)
+
+    def _make_wait_ctrl(self):
+        """스마트 모드면 SmartWait 제어기(학습값 이어받음), 아니면 None."""
+        if self.config.get("send_speed", "smart") != "smart":
+            return None
+        return SmartWait(self.config.get("smart_wait", 0.5))
+
+    def _persist_smart(self, ctrl):
+        """전송 종료 시 학습된 wait 영속 — 다음 실행이 이어받음."""
+        if ctrl is None:
+            return
+        self.config["smart_wait"] = round(ctrl.wait, 2)
+        try:
+            save_settings(self.config)
+        except Exception:
+            pass
 
     def _save_settings(self):
         for key, v in self._settings_vars.items():
@@ -1475,16 +1493,19 @@ class ClassManagerApp:
             return
 
         self.send_btn.config(state="disabled")
-        wait = self._send_wait()   # 속도 프리셋(고속/보통/안정)
+        ctrl = self._make_wait_ctrl()             # 스마트 모드 제어기(None=고정 프리셋)
+        wait = ctrl.wait if ctrl else self._send_wait()
 
         def _status(text):
             self.root.after(0, lambda: self._set_status(text))
 
         def _done(total):
+            self._persist_smart(ctrl)             # 학습값 저장 — 다음 실행 이어받기
             def _ui():
                 self._set_status(f"✅ 전송 완료 — {total}명", GREEN)
                 self.send_btn.config(state="normal")
                 messagebox.showinfo("완료", f"{total}명 전송 완료!")
             self.root.after(0, _ui)
 
-        send_messages(msgs, wait_time=wait, status_cb=_status, done_cb=_done)
+        send_messages(msgs, wait_time=wait, status_cb=_status, done_cb=_done,
+                      wait_ctrl=ctrl)

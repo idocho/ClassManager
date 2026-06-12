@@ -1,7 +1,7 @@
 # ClassManager — 요구사항 명세서
 
 **Crafted by IDO(idocho@kakao.com) · Powered by Claude AI**  
-**문서 버전**: 2.2 · **최종 수정**: 2026-06-12
+**문서 버전**: 2.3 · **최종 수정**: 2026-06-12
 
 > Firebase 스키마: [DB_SCHEMA.md](./DB_SCHEMA.md) 참조
 
@@ -14,6 +14,7 @@
 | 1.0 | 2026-05-24 | 최초 작성 (KakaoTalk Blaster → ClassManager 리팩토링) |
 | 2.0 | 2026-05-27 | DB 구조 전면 재설계 (반 중심 → 학생 중심). 변수명 일괄 변경. 무소속 학생 관리 UI 추가 |
 | 2.1 | 2026-05-28 | nameKey = 출결번호 (불변 고유번호). 이름 기반 키 + 동명이인 suffix 로직 폐기. CSV export 컬럼 변경 |
+| 2.3 | 2026-06-12 | **전송 속도 「스마트」 모드 (기본값) — DRW v8.11 이식** `kakao_send.SmartWait`(AIMD+EMA): 신호=방 열림 게이트 실측(t_open·1차 재시도). 1차 실패→×1.6 감속 / 빠른 통과(≤0.2s) 연속 2회→-0.15s 가속 / EMA>0.8s 선제 +0.1s. 범위 [0.25,1.2]s, 학습값 `smart_wait` settings.json 영속(다음 실행 이어받음, 전송 완료 시 저장). `send_messages(wait_ctrl=)` 파라미터 추가 — 건마다 학습된 wait 적용. 설정 라디오 스마트(권장)/고속/보통/안정 4단(기본 smart). 게이트가 바닥을 받쳐 가속해도 오발송 불가 — 적응은 1차 통과율만 조절. 단위 테스트 6건(tests/test_smart_wait.py) |
 | 2.2 | 2026-06-12 | **학년단위 시험 발송 지원** — `_load_scores`가 `scores/weekly/{classId}`에 더해 `scores/achievement/` 전체를 로드, 현재 반 학생이 응시한(students 맵에 nameKey 존재) 시험만 시험 드롭다운에 「학년·{curriculumKey}」 그룹으로 합류. 성적 통보 템플릿의 평균/최고/최저/백분율은 노드 내장 students 맵 = **학년 전체 코호트** 기준(반별 시험은 종전대로 반 코호트). 점수 없는 학생 자동 제외·meta 폴백 등 발송 로직 변경 없음. achievement 로드 실패 시 반별 시험 발송은 정상 동작(무음 폴백) |
 
 ---
