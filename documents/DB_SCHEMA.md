@@ -1,7 +1,9 @@
 # Firebase DB 스키마 명세
 
 **공유 문서 — ClassManager / DRW2 / DailyReportAnalyzer 공통 참조**  
-**문서 버전**: 1.5 · **최종 수정**: 2026-06-11
+**문서 버전**: 1.6 · **최종 수정**: 2026-06-12
+
+> v1.6: `scores/trash/` 삭제 스냅샷 노드 신설(시험 삭제 전 자동 백업·관리자 복원). 학년 시험 testKey에서 날짜 제외(`{type}|{round}`), 기출모의고사 weekly 이동, 유형별 기본 만점(성취도평가·반배치고사 150). 추가만 있는 비파괴 개정 — `schema_version` 노드값 불변(14).
 
 > v1.5: `schema_version` 노드 신설(정수, 문서 버전×10 — v1.4 스키마=14). Security Rules 전환 창에 생성. 클라이언트는 기동 시 자기 `SCHEMA_MAX` 초과면 차단(웹/PC DRW/CM) 또는 경고(Analyzer, read-only). 노드 부재·읽기 실패=통과. 모든 클라 REST는 시크릿 설정 시 `?auth={DB Secret}` 부가(미설정=무인증, 전환 전 동작). 절차: DRW `documents/SECURITY_RULES_PLAN.md`. ※ schema_version 값은 이 문서의 "구조 호환성" 버전만 따름 — 문서 표기 수정 등 비파괴 개정은 노드값 불변.
 > v1.4: assignments 실형식 정정(객체 배열 {classId,subject,group,role} — 종전 문자열 배열 표기는 오기). lastSent 노드 DB에서 삭제 완료.
@@ -63,16 +65,22 @@ root/
 │   │               └── students/
 │   │                   └── {nameKey}: 85
 │   │
-│   └── achievement/
-│       └── {curriculum}/           # curriculum.js 키 (점 → 언더스코어 치환)
-│           └── {testKey}/
-│               ├── meta/
-│               │   ├── date: "YYYY-MM-DD"
-│               │   ├── max_score: 100
-│               │   ├── round: 1
-│               │   └── type: "성취도평가"|"기출모의고사"|...
-│               └── students/
-│                   └── {nameKey}: 92
+│   ├── achievement/
+│   │   └── {curriculum}/           # curriculum.js 키 (점 → 언더스코어 치환)
+│   │       └── {testKey}/          # 형식: "{type}|{round}" — 날짜 미포함(반·학생별 시행일 상이 허용, DRW v8.23)
+│   │           ├── meta/
+│   │           │   ├── date: "YYYY-MM-DD"   # 대표 시행일(마지막 저장 기준)
+│   │           │   ├── max_score: 150       # 성취도평가·반배치고사 기본 150, 그 외 100
+│   │           │   ├── round: 1
+│   │           │   └── type: "성취도평가"|"반배치고사"|"실전모의고사"   # 기출모의고사는 weekly로 이동(v8.20)
+│   │           └── students/
+│   │               └── {nameKey}: 92        # 과정 수강생 전체 코호트 (반 무관)
+│   │
+│   └── trash/                      # (v1.6) 삭제 스냅샷 — 시험 삭제 전 자동 백업, 관리자 복원 UI(DRW 웹)
+│       └── {ts}_{testKeySafe}/
+│           ├── path: "scores/weekly/..|scores/achievement/.."   # 원 경로
+│           ├── testKey, reason, deletedAt(ISO), by
+│           └── test/ {meta, students}       # 삭제 시점 전체 노드
 │
 ├── config/
 │   └── instructors/

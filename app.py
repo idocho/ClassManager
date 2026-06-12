@@ -1153,7 +1153,26 @@ class ClassManagerApp:
             try:
                 # scores/weekly/{classId} 전체 로드 (subject → testKey → data)
                 data = firebase_get(self.config, f"scores/weekly/{classId}")
-                self.scoreData = data if isinstance(data, dict) else {}
+                data = data if isinstance(data, dict) else {}
+                # 학년단위 시험(scores/achievement/{curriculumKey}) 합류:
+                # 현재 반 학생이 응시한 시험만 「학년·{curriculumKey}」 그룹으로 노출.
+                # 평균/최고/최저/백분율은 노드 내장 students 맵 = 학년 전체 코호트 기준.
+                try:
+                    roster = {k for k, v in self.studentsData.items()
+                              if isinstance(v, dict) and v.get("class") == classId}
+                    ach = firebase_get(self.config, "scores/achievement")
+                    if isinstance(ach, dict) and roster:
+                        for ck, tests in ach.items():
+                            if not isinstance(tests, dict):
+                                continue
+                            keep = {tk: tv for tk, tv in tests.items()
+                                    if isinstance(tv, dict)
+                                    and roster & set((tv.get("students") or {}).keys())}
+                            if keep:
+                                data[f"학년·{ck}"] = keep
+                except Exception:
+                    pass  # 학년단위 로드 실패해도 반별 시험 발송은 정상 동작
+                self.scoreData = data
             except Exception:
                 self.scoreData = {}
             self.root.after(0, self._refresh_score_cb)

@@ -1,7 +1,7 @@
 # ClassManager — 요구사항 명세서
 
 **Crafted by IDO(idocho@kakao.com) · Powered by Claude AI**  
-**문서 버전**: 2.1 · **최종 수정**: 2026-05-28
+**문서 버전**: 2.2 · **최종 수정**: 2026-06-12
 
 > Firebase 스키마: [DB_SCHEMA.md](./DB_SCHEMA.md) 참조
 
@@ -14,6 +14,7 @@
 | 1.0 | 2026-05-24 | 최초 작성 (KakaoTalk Blaster → ClassManager 리팩토링) |
 | 2.0 | 2026-05-27 | DB 구조 전면 재설계 (반 중심 → 학생 중심). 변수명 일괄 변경. 무소속 학생 관리 UI 추가 |
 | 2.1 | 2026-05-28 | nameKey = 출결번호 (불변 고유번호). 이름 기반 키 + 동명이인 suffix 로직 폐기. CSV export 컬럼 변경 |
+| 2.2 | 2026-06-12 | **학년단위 시험 발송 지원** — `_load_scores`가 `scores/weekly/{classId}`에 더해 `scores/achievement/` 전체를 로드, 현재 반 학생이 응시한(students 맵에 nameKey 존재) 시험만 시험 드롭다운에 「학년·{curriculumKey}」 그룹으로 합류. 성적 통보 템플릿의 평균/최고/최저/백분율은 노드 내장 students 맵 = **학년 전체 코호트** 기준(반별 시험은 종전대로 반 코호트). 점수 없는 학생 자동 제외·meta 폴백 등 발송 로직 변경 없음. achievement 로드 실패 시 반별 시험 발송은 정상 동작(무음 폴백) |
 
 ---
 

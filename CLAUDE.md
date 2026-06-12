@@ -53,11 +53,12 @@ Requires KakaoTalk PC app installed and logged in. `pyautogui`/`pyperclip` must 
 {dbPath}/
   students/{nameKey}        → {name, class}          # nameKey = 출결번호 (unique); class = classId or null
   classes/{classId}         → {group: "M"|"T", ...}  # roster groups; classId is the human class name
-  scores/weekly/{classId}/  → {subject: {testKey: {type, round, date, max_score, students: {name: score}}}}
+  scores/weekly/{classId}/  → {subject: {testKey: {meta: {type, round, date, max_score, memo}, students: {nameKey: score}}}}   # legacy records may have meta fields flat at the root — build_score_ctx falls back
+  scores/achievement/{curriculumKey}/{testKey} → same shape, grade-shared across classes. _load_scores merges tests taken by the current class into the exam dropdown as "학년·{curriculumKey}" (stats cohort = whole grade)
 ```
 
 A student appears in the roster/send lists only when its `class` equals an existing `classId` **and** that class's `group` matches the active group (M/T). Students with `class=null` (or a class not in `classes/`) show in the **무소속(unassigned)** tab. `scores/` is read-only.
 
-`testKey` format: `"{YYYY-MM-DD}|{type}|{round}"`. Exam dropdown is sorted by key descending (most recent first).
+`testKey` format — weekly: `"{YYYY-MM-DD}|{type}|{round}"`; achievement: `"{type}|{round}"` (no date — classes may take the same grade-level exam on different days; the date lives in `meta.date` as a representative value). Exam dropdown sorts by key descending, so weekly entries are most-recent-first; achievement entries sort by type/round (their label still shows `meta.date`). `scores/trash/` holds pre-delete snapshots written by DRW web — CM never reads or writes it.
 
 The DB at `dbPath` may be **shared** with other apps (e.g. DailyReportWizard owns `obs/`, `config/`, `session/`, `input/`, `history/` — `lastSent/`는 v2.1.2 폐기). Never overwrite the whole `{dbPath}` node — write only `students/` and `classes/`.
