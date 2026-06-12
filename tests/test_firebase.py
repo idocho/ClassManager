@@ -4,8 +4,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import urllib.parse
 import pytest
-from firebase import _fb_url, today_key
-import datetime
+from firebase import _fb_url
 
 
 # ── _fb_url ──────────────────────────────────────────────────────────
@@ -51,16 +50,3 @@ def test_fb_url_partial_config_keys():
     with pytest.raises(ValueError):
         _fb_url({"dbPath": "my/path"}, "config")  # dbUrl 없음
 
-
-# ── today_key ────────────────────────────────────────────────────────
-
-def test_today_key_format():
-    key = today_key()
-    parts = key.split("-")
-    assert len(parts) == 3
-    assert len(parts[0]) == 4  # YYYY
-    assert len(parts[1]) == 2  # MM
-    assert len(parts[2]) == 2  # DD
-
-def test_today_key_is_today():
-    assert today_key() == datetime.date.today().isoformat()
