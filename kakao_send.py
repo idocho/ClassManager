@@ -207,6 +207,17 @@ def close_rooms(rooms) -> int:
     WM_CLOSE = 0x0010
     targets = {_norm_title(r) for r in rooms if _norm_title(r)}
 
+    # 오폐쇄 방지 2중 가드:
+    # ① 카카오톡 프로세스 소속 창만 — 학생 이름이 제목에 들어간 타 앱(메모장·브라우저 탭
+    #    등)이 매칭돼 닫히는 사고 차단
+    # ② 제목 전방일치 — 방 이름으로 시작하는 창만(허용 잔여부 = 인원수 "(3)" 등).
+    #    room_opened()의 포함 비교보다 엄격(그쪽은 읽기 검증, 여기는 파괴 동작)
+    main_hwnd = _find_kakao_hwnd()
+    if not main_hwnd:
+        return 0
+    kakao_pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(main_hwnd, ctypes.byref(kakao_pid))
+
     def _matched():
         found = []
 
@@ -214,13 +225,17 @@ def close_rooms(rooms) -> int:
         def _enum(hwnd, _):
             if not user32.IsWindowVisible(hwnd):
                 return True
+            pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value != kakao_pid.value:   # ① 카톡 프로세스 외 제외
+                return True
             t = ctypes.create_unicode_buffer(256)
             user32.GetWindowTextW(hwnd, t, 256)
             title = t.value.strip()
-            if title in _KAKAO_TITLES:        # 메인 창은 제외
+            if title in _KAKAO_TITLES:         # 메인 창 제외
                 return True
             nt = _norm_title(title)
-            if nt and any(r in nt for r in targets):
+            if nt and any(nt.startswith(r) for r in targets):   # ② 전방일치
                 found.append(hwnd)
             return True
 
@@ -229,6 +244,9 @@ def close_rooms(rooms) -> int:
 
     before = _matched()
     for hwnd in before:
+        # WM_CLOSE = 사용자의 X 클릭과 동일 경로 — 업로드 진행 중이면 카톡이
+        # "전송 중인 파일" 확인을 띄우고 닫기를 보류함. 그 팝업은 절대 자동 조작하지
+        # 않음(확인=업로드 취소). 기존 수동 닫기 습관과 동일한 보호 수준.
         user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
     time.sleep(0.5)
     return max(0, len(before) - len(_matched()))
